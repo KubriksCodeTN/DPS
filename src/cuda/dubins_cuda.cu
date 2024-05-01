@@ -46,12 +46,23 @@ __global__ void get_safe_curve_cuda(
     * we add fabs to normalize in [0, pi)
     */
     
-
+    //old version with sincos
+/*   
     double cross_prod_3_component = vx0 * vyf - vy0 * vxf;
     double alpha = M_PI - atan2(fabs(cross_prod_3_component), vx0 * vxf + vy0 * vyf); //angle between vectors
     double sina, cosa;
     sincos(alpha / 2., &sina, &cosa);
     double d = r * (cosa / sina);
+    double xf = b.x + d * unitxf;
+    double yf = b.y + d * unityf;
+    new_a_arr[id] = {xf, yf};
+*/
+    
+
+    double cross_prod_3_component = vx0 * vyf - vy0 * vxf;
+    double abs_cross_prod = fabs(cross_prod_3_component);
+    double alpha = M_PI - atan2(abs_cross_prod, vx0 * vxf + vy0 * vyf); //angle between vectors
+    double d = r * (abs_cross_prod / (vx0 * vxf + vy0 * vyf + normf * norm0));
     double xf = b.x + d * unitxf;
     double yf = b.y + d * unityf;
     new_a_arr[id] = {xf, yf};
@@ -65,8 +76,18 @@ __global__ void get_safe_curve_cuda(
         .a3 = {turning_point.x, turning_point.y, th0, ((cross_prod_3_component > 0) - (cross_prod_3_component < 0)) / r, (M_PI - alpha) * r, xf, yf, thf},
         .L = straight_segment_len + (M_PI - alpha) * r
     };
-    
+
     out_arr[id] = curve;
+    /*
+    __syncthreads();
+
+    if(id != N_points - 3){
+        out_arr[id + 1].a2.x0 = xf;
+        out_arr[id + 1].a2.y0 = yf;
+        out_arr[id + 1].a2.L = sqrt((xf - out_arr[id + 1].a2.xf) * (xf - out_arr[id + 1].a2.xf) + 
+            (yf - out_arr[id + 1].a2.yf) * (yf - out_arr[id + 1].a2.yf));    
+    }
+    */
 }
 
 void Planner::dubins_wrapper(const VisiLibity::Polyline& path, multi_dubins::path_t& sol, VisiLibity::Point& new_a, double r){
@@ -83,7 +104,7 @@ void Planner::dubins_wrapper(const VisiLibity::Polyline& path, multi_dubins::pat
     } 
     
     int n_bytes_x_components = sizeof(double) * x_components_h.size();
-    int n_bytes_out_arr = sizeof(dubins::d_curve) * new_a_arr_h.size(); // without first and last curves
+    int n_bytes_out_arr = sizeof(dubins::d_curve) * new_a_arr_h.size(); // n. of curves = n. of new_a points
     int n_bytes_new_a_arr = sizeof(point_t) * new_a_arr_h.size();
 
     double *x_components, *y_components;
