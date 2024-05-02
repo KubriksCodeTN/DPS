@@ -3,8 +3,9 @@
 ## Overleaf
 https://www.overleaf.com/5231953997qtgqsbpcmtwh#f5c2a8
 
-## Desmos demo
+## Desmos demos
 https://www.desmos.com/calculator/ucp5rgnzow?lang=it
+https://www.desmos.com/calculator/rjevj8bn16?lang=it
 
 ## Usage
 - make sequential (or make cuda)
