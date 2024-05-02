@@ -27,5 +27,8 @@ obj/%.o: src/sequential/%.cpp
 obj/%.cu.o: src/cuda/%.cu
 	nvcc $(CUDAFLAGS) $(CCFLAGS) -dc $< -o $@
 
+makedir:
+	mkdir obj bin
+
 clean:
 	rm obj/* bin/*
