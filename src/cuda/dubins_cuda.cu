@@ -78,7 +78,7 @@ __global__ void get_safe_curve_cuda(
     };
 
     out_arr[id] = curve;
-
+    /*
     __syncthreads();
 
     if(id != N_points - 3){
@@ -87,11 +87,10 @@ __global__ void get_safe_curve_cuda(
         out_arr[id + 1].a2.L = sqrt((xf - out_arr[id + 1].a2.xf) * (xf - out_arr[id + 1].a2.xf) + 
             (yf - out_arr[id + 1].a2.yf) * (yf - out_arr[id + 1].a2.yf));    
     }
+    */
 }
 
 void Planner::dubins_wrapper(const VisiLibity::Polyline& path, multi_dubins::path_t& sol, VisiLibity::Point& new_a, double r){
-    std::cerr << "\n----CUDA ALGO----\n";
-
     std::vector<double> x_components_h, y_components_h;
     std::vector<point_t> new_a_arr_h{ sol.size() - 2 }; // first and last curves dont generate a new_a point
     int threads = 32;
