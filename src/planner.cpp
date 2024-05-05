@@ -32,6 +32,9 @@ void desmos_dump(auto clipper_env){
  * @brief creates a dump to visualize the shortest path on desmos
  */
 void path_dump(auto path){
+    if(path.size() >= 50)
+        return;
+    std::cout << "Polyline:\n";
     for (uint32_t i = 0U; i < path.size() - 1; ++i){
         std::cout << std::fixed << "polygon((" << path[i].x() << ", " << path[i].y() << "), (";
         std::cout << std::fixed << path[i + 1].x() << ", " << path[i + 1].y() << "))\n";
@@ -55,6 +58,9 @@ void arc_dump(auto path){
  * @brief creates a dump to visualize the dubins shortest path on desmos
  */
 void dubins_dump(const auto& dpath){
+    if(dpath.size() >= 50)
+        return;
+    std::cout << "Dubins path:\n";
     for (const auto& c : dpath){
         arc_dump(sample_arc(c.a1, 4));
         arc_dump(sample_arc(c.a2, 4));
@@ -205,7 +211,5 @@ void Planner::test(const VisiLibity::Polyline& shortest_path){
     multi_dubins::path_t p0 = dubins_path(shortest_path, th0, thf, inv_k);
     
     path_dump(shortest_path);
-
-    LOG("dubins path:\n");
     dubins_dump(p0);
 }
