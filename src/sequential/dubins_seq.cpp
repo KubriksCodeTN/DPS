@@ -64,8 +64,6 @@ dubins::d_curve Planner::get_safe_curve(VisiLibity::Point a, VisiLibity::Point b
 }
 
 void Planner::dubins_wrapper(const VisiLibity::Polyline& path, multi_dubins::path_t& sol, VisiLibity::Point& new_a, double r){
-    std::cerr << "\n----sequential ALGO----\n";
-
     new_a = path[1];
     auto start_time = std::chrono::system_clock::now();
     
