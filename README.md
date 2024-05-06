@@ -11,4 +11,5 @@ https://www.desmos.com/calculator/rjevj8bn16?lang=it
 - make makedir
 - make sequential (or make cuda)
 - bin/dubins_sequential < "xxx_points.txt" (or dubins_cuda)
+- 
 the output can be copied into desmos to visualize the path
