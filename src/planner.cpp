@@ -20,7 +20,7 @@ path_d sample_arc(dubins::d_arc, uint_fast32_t);
  */
 void desmos_dump(auto clipper_env){
     for (const auto& s : clipper_env){
-        std::cout << "polygon(";
+        std::cout << "\\operatorname{polygon}(";
         for (const auto t : s)
             std::cout << "(" << t.x() << ", " << t.y() << "), ";
         std::cout << "\b\b)\n";
@@ -32,11 +32,11 @@ void desmos_dump(auto clipper_env){
  * @brief creates a dump to visualize the shortest path on desmos
  */
 void path_dump(auto path){
-    if(path.size() >= 50)
+    if(path.size() >= 500)
         return;
     std::cout << "Polyline:\n";
     for (uint32_t i = 0U; i < path.size() - 1; ++i){
-        std::cout << std::fixed << "polygon((" << path[i].x() << ", " << path[i].y() << "), (";
+        std::cout << std::fixed << "\\operatorname{polygon}((" << path[i].x() << ", " << path[i].y() << "), (";
         std::cout << std::fixed << path[i + 1].x() << ", " << path[i + 1].y() << "))\n";
     }
     std::cout << "---------------------------------------------\n";
@@ -47,7 +47,7 @@ void path_dump(auto path){
  */
 void arc_dump(auto path){
     for (uint32_t i = 0U; i < path.size() - 1; ++i){
-        std::cout << std::fixed << "polygon((" << path[i].x() << ", " << path[i].y() << "), (";
+        std::cout << std::fixed << "\\operatorname{polygon}((" << path[i].x() << ", " << path[i].y() << "), (";
         std::cout << std::fixed << path[i + 1].x() << ", " << path[i + 1].y() << "))\n";
     }
     std::cout << "---------------------------------------------\n";
@@ -58,7 +58,7 @@ void arc_dump(auto path){
  * @brief creates a dump to visualize the dubins shortest path on desmos
  */
 void dubins_dump(const auto& dpath){
-    if(dpath.size() >= 50)
+    if(dpath.size() >= 500)
         return;
     std::cout << "Dubins path:\n";
     for (const auto& c : dpath){
@@ -104,16 +104,6 @@ VisiLibity::Point circline(double x, double y, double th, double s, double k){
 }
 
 /**
- * @brief sample a point from a line (segment)
- */
-VisiLibity::Point lineline(double x0, double y0, double xf, double yf, double s){
-    return { 
-        x0 + s * (xf - x0), 
-        y0 + s * (yf - y0),
-    };
-}
-
-/**
  * @brief sample a dubins arc
  * 
  * @param arc the dubins arc to sample
@@ -128,24 +118,6 @@ path_d sample_arc(dubins::d_arc arc, uint_fast32_t n_samples = 30){
     std::for_each(v.begin(), v.end(), [&](auto& p){
         double s = arc.L / n_samples * (&p - &v[0]);
         p = circline(arc.x0, arc.y0, arc.th0, s, arc.k);
-    });
-
-    return v;
-}
-
-/**
- * @brief sample a line (segment)
- * 
- * @param line the line to sample
- * @param n_samples not so fast number of samples needed. 
- */
-path_d sample_line(dubins::d_arc line, uint32_t n_samples = 30){
-    path_d v{ n_samples + 1 };
-
-    // &p - &v[0] is a nice hack to get the element idx without race conditions
-    std::for_each(v.begin(), v.end(), [&](auto& p){
-        double s = 1. / n_samples * (&p - &v[0]);
-        p = lineline(line.x0, line.y0, line.xf, line.yf, s);
     });
 
     return v;
@@ -212,4 +184,9 @@ void Planner::test(const VisiLibity::Polyline& shortest_path){
     
     path_dump(shortest_path);
     dubins_dump(p0);
+    double len = 0;
+    for(int i = 0; i < p0.size(); ++i)
+        len += p0[i].L;
+
+    std::cout << "Total length: " << len << "\n";
 }
