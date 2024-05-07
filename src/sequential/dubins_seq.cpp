@@ -63,13 +63,15 @@ dubins::d_curve Planner::get_safe_curve(VisiLibity::Point a, VisiLibity::Point b
     return curve;
 }
 
-void Planner::dubins_wrapper(const VisiLibity::Polyline& path, multi_dubins::path_t& sol, VisiLibity::Point& new_a, double r){
+double Planner::dubins_wrapper(const VisiLibity::Polyline& path, multi_dubins::path_t& sol, VisiLibity::Point& new_a, double r){
     new_a = path[1];
+
     auto start_time = std::chrono::system_clock::now();
-    
+
     for (uint64_t i = 1; i < path.size() - 2; ++i)
         sol[i] = get_safe_curve(new_a, path[i + 1], path[i + 2], new_a, r);
+        
     auto end_time = std::chrono::system_clock::now();
-    std::cout << "time elapsed: " << std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count() << " us\n";
 
+    return std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
 }

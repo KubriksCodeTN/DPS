@@ -17,7 +17,7 @@ class Planner{
         multi_dubins::path_t sample_curve(VisiLibity::Point, double, VisiLibity::Point, double, double);
         // void dubins_seq(const VisiLibity::Polyline&, multi_dubins::path_t&, VisiLibity::Point&, double);
         // void dubins_cuda(const VisiLibity::Polyline&, multi_dubins::path_t&, VisiLibity::Point&, double);
-        void dubins_wrapper(const VisiLibity::Polyline&, multi_dubins::path_t&, VisiLibity::Point&, double);
+        double dubins_wrapper(const VisiLibity::Polyline&, multi_dubins::path_t&, VisiLibity::Point&, double);
 
     public:
         // robot constraints
@@ -27,6 +27,6 @@ class Planner{
         // static inline constexpr double velocity = x; // not needed?
 
         Planner() = default;
-        multi_dubins::path_t dubins_path(const VisiLibity::Polyline&, double, double, double);
+        multi_dubins::path_t dubins_path(const VisiLibity::Polyline&, double, double, double, double&);
         void test(const VisiLibity::Polyline&);
 };

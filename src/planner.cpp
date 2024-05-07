@@ -126,7 +126,7 @@ path_d sample_arc(dubins::d_arc arc, uint_fast32_t n_samples = 30){
 /**
  * @brief create the dubins path following the proposed strategies 
  */
-multi_dubins::path_t Planner::dubins_path(const VisiLibity::Polyline& path, double th0, double thf, double r){
+multi_dubins::path_t Planner::dubins_path(const VisiLibity::Polyline& path, double th0, double thf, double r, double& time){
 
     /*
     double th;
@@ -159,7 +159,7 @@ multi_dubins::path_t Planner::dubins_path(const VisiLibity::Polyline& path, doub
     multi_dubins::path_t sol{ path.size() - 1 };
     VisiLibity::Point new_a;
 
-    dubins_wrapper(path, sol, new_a, r);
+    time = dubins_wrapper(path, sol, new_a, r);
     
     /*
     start = sample_curve(path[0], th0, path[1], sol[1].a1.th0, 1. / min_r);
@@ -169,6 +169,10 @@ multi_dubins::path_t Planner::dubins_path(const VisiLibity::Polyline& path, doub
         sol.insert(sol.begin() + 1, start[1]);
     std::ranges::move(end, std::back_insert_iterator(sol));
     */
+    // until we make first and last curve
+    sol[0] = {0};
+    sol.back() = {0};
+    
     return sol;
 }
 
@@ -179,14 +183,16 @@ void Planner::test(const VisiLibity::Polyline& shortest_path){
     double thf = atan2(shortest_path[shortest_path.size() - 1].y() - shortest_path[shortest_path.size() - 2].y(), 
         shortest_path[shortest_path.size() - 1].x() - shortest_path[shortest_path.size() - 2].x());
     
+    double time;
+
     // get the path made out of dubin curves
-    multi_dubins::path_t p0 = dubins_path(shortest_path, th0, thf, inv_k);
+    multi_dubins::path_t p0 = dubins_path(shortest_path, th0, thf, inv_k, time);
     
-    path_dump(shortest_path);
-    dubins_dump(p0);
     double len = 0;
     for(int i = 0; i < p0.size(); ++i)
         len += p0[i].L;
-
-    std::cout << "Total length: " << len << "\n";
+    std::cout << "time elapsed: " << time << " us Total length: " << len << "\n";
+    
+    path_dump(shortest_path);
+    dubins_dump(p0);
 }

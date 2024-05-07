@@ -16,7 +16,7 @@ __global__ void get_safe_curve_cuda(
 ){
 
     int id = blockIdx.x * blockDim.x + threadIdx.x;
-    if(id >= N_points-2)
+    if(id > N_points - 3)
         return;
 
     point_t a = {x_components[id], y_components[id]};
@@ -61,36 +61,37 @@ __global__ void get_safe_curve_cuda(
 
     double cross_prod_3_component = vx0 * vyf - vy0 * vxf;
     double abs_cross_prod = fabs(cross_prod_3_component);
-    double alpha = M_PI - atan2(abs_cross_prod, vx0 * vxf + vy0 * vyf); //angle between vectors
+    double alpha = M_PI - atan2(abs_cross_prod, vx0 * vxf + vy0 * vyf); //angle between vectors "pi -" can be canceled in every place where alpha is used 
     double d = r * (abs_cross_prod / (vx0 * vxf + vy0 * vyf + normf * norm0));
     double xf = b.x + d * unitxf;
     double yf = b.y + d * unityf;
     new_a_arr[id] = {xf, yf};
 
-    point_t turning_point{b.x + d * -unitx0, b.y + d * -unity0};
+    point_t turning_point{b.x - d * unitx0, b.y - d * unity0};
     double straight_segment_len = sqrt((turning_point.x - a.x)*(turning_point.x - a.x) + (turning_point.y - a.y)*(turning_point.y - a.y));
 
     dubins::d_curve curve = {
         .a1 = {a.x, a.y, th0, 0, 0, a.x, a.y, th0}, // garbage
         .a2 = {a.x, a.y, th0, 0, straight_segment_len, turning_point.x, turning_point.y, th0},
         .a3 = {turning_point.x, turning_point.y, th0, ((cross_prod_3_component > 0) - (cross_prod_3_component < 0)) / r, (M_PI - alpha) * r, xf, yf, thf},
-        .L = straight_segment_len + (M_PI - alpha) * r
+        .L = /* a1.len (which is 0) + */ straight_segment_len + (M_PI - alpha) * r
     };
 
     out_arr[id] = curve;
-    /*
-    __syncthreads();
 
-    if(id != N_points - 3){
-        out_arr[id + 1].a2.x0 = xf;
-        out_arr[id + 1].a2.y0 = yf;
-        out_arr[id + 1].a2.L = sqrt((xf - out_arr[id + 1].a2.xf) * (xf - out_arr[id + 1].a2.xf) + 
-            (yf - out_arr[id + 1].a2.yf) * (yf - out_arr[id + 1].a2.yf));    
-    }
-    */
+    // correct the final point and length of each curve
+    // __syncthreads();
+
+    // if(id != N_points - 3){
+    //     out_arr[id + 1].a2.x0 = xf;
+    //     out_arr[id + 1].a2.y0 = yf;
+    //     out_arr[id + 1].a2.L = sqrt((xf - out_arr[id + 1].a2.xf) * (xf - out_arr[id + 1].a2.xf) + 
+    //         (yf - out_arr[id + 1].a2.yf) * (yf - out_arr[id + 1].a2.yf));   
+    //     out_arr[id + 1].L = out_arr[id + 1].a2.L + out_arr[id + 1].a3.L;
+    // }    
 }
 
-void Planner::dubins_wrapper(const VisiLibity::Polyline& path, multi_dubins::path_t& sol, VisiLibity::Point& new_a, double r){
+double Planner::dubins_wrapper(const VisiLibity::Polyline& path, multi_dubins::path_t& sol, VisiLibity::Point& new_a, double r){
     std::vector<double> x_components_h, y_components_h;
     std::vector<point_t> new_a_arr_h{ sol.size() - 2 }; // first and last curves dont generate a new_a point
     int threads = 32;
@@ -121,24 +122,36 @@ void Planner::dubins_wrapper(const VisiLibity::Polyline& path, multi_dubins::pat
     auto start_time = std::chrono::system_clock::now();
     get_safe_curve_cuda<<<blocks, threads>>>(x_components, y_components, new_a_arr_dev, out_arr_dev, r, x_components_h.size());
     auto end_time = std::chrono::system_clock::now();
-    std::cout << "time elapsed: " << std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count() << " us\n";
+    
     //std::cout << cudaDeviceSynchronize()<<"\n";
 
     cudaMemcpy(sol.data()+1, out_arr_dev, n_bytes_out_arr, cudaMemcpyDeviceToHost); // +1 leaves space for 1° curve
     cudaMemcpy(new_a_arr_h.data(), new_a_arr_dev, n_bytes_new_a_arr, cudaMemcpyDeviceToHost);
 
-    /*
+    // adjust the 
     for(int i = 2; i < sol.size()-1; ++i){
+
         sol[i].a2.x0 = new_a_arr_h[i-2].x;
         sol[i].a2.y0 = new_a_arr_h[i-2].y;
+
+        // I want to have a continous curve
+        sol[i].a1.x0 = sol[i].a2.x0;
+        sol[i].a1.y0 = sol[i].a2.y0;
+        sol[i].a1.xf = sol[i].a2.x0;
+        sol[i].a1.yf = sol[i].a2.y0;
+
         sol[i].a2.L = sqrt(((sol[i].a2.xf - sol[i].a2.x0)*(sol[i].a2.xf - sol[i].a2.x0) + 
             (sol[i].a2.yf - sol[i].a2.y0)*(sol[i].a2.yf - sol[i].a2.y0)));
-        
+        sol[i].L = sol[i].a2.L + sol[i].a3.L;;
     }
-    sol[1].a2.L = sqrt(((sol[1].a2.xf - sol[1].a2.x0)*(sol[1].a2.xf - sol[1].a2.x0) + 
-            (sol[1].a2.yf - sol[1].a2.y0)*(sol[1].a2.yf - sol[1].a2.y0)));
-    */
+
+    // needed to adjust the length of the curve between second and third point
+    // can't do it in CUDA since out_arr[0] is not corrected after __syncthreads()
+    // sol[1].a2.L = sqrt(((sol[1].a2.xf - sol[1].a2.x0)*(sol[1].a2.xf - sol[1].a2.x0) + 
+    //         (sol[1].a2.yf - sol[1].a2.y0)*(sol[1].a2.yf - sol[1].a2.y0)));
+    // sol[1].L += sol[1].a2.L;
 
     new_a = {new_a_arr_h.back().x, new_a_arr_h.back().y};
 
+    return std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
 }
