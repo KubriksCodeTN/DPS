@@ -1,7 +1,13 @@
 from random import uniform
 from math import sin, cos, pi, tan
+from sys import argv
 
-n_points = 499
+
+if len(argv) != 2:
+    print(f"ERROR!!!\nusage: python3 {argv[0]} <number of points>")
+    exit(-1)
+
+n_points = int(argv[1])
 radius = .5
 min_th = pi * .75
 min_edge_len = 2 * tan(min_th / 2)
