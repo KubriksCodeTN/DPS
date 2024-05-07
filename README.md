@@ -14,5 +14,5 @@ https://www.desmos.com/calculator/rjevj8bn16?lang=it
 
 the output can be copied into desmos to visualize the path
 
-a new test file named "xyz_points.txt", where xyz is the number of desired points, can be create under the folder "test" by running
+a new test file called "xyz_points.txt", where xyz is the number of desired points, can be create under the folder "test" by running
 python3 gen_points.py xyx
