@@ -62,9 +62,9 @@ void dubins_dump(const auto& dpath){
         return;
     std::cout << "Dubins path:\n";
     for (const auto& c : dpath){
-        arc_dump(sample_arc(c.a1, 4));
-        arc_dump(sample_arc(c.a2, 4));
-        arc_dump(sample_arc(c.a3, 4));
+        arc_dump(sample_arc(c.a1, 5));
+        arc_dump(sample_arc(c.a2, 5));
+        arc_dump(sample_arc(c.a3, 5));
     }
     std::cout << "---------------------------------------------\n";
 }
@@ -126,34 +126,36 @@ path_d sample_arc(dubins::d_arc arc, uint_fast32_t n_samples = 30){
 /**
  * @brief create the dubins path following the proposed strategies 
  */
+/*
 multi_dubins::path_t Planner::dubins_path(const VisiLibity::Polyline& path, double th0, double thf, double r, double& time){
 
-    /*
-    double th;
-    multi_dubins::path_t start;
-    multi_dubins::path_t end;
-    switch (path.size()){
-    case 2:
-        return sample_curve(path[0], th0, path[1], thf, 1. / min_r);
-    case 3:
-        // note th as intermediate angle might not always be the best but it looks like 
-        // a decent choice for a O(1) time algorithm
-        th = atan2(path[2].y() - path[1].y(), path[2].x() - path[1].x());
-        start = sample_curve(path[0], th0, path[1], th, 1. / min_r);
-        end = sample_curve(path[1], th, path[2], thf, 1. / min_r);
-        std::ranges::move(end, std::back_insert_iterator(start));
-        return start;
-    case 4:
-        th = atan2(path[2].y() - path[1].y(), path[2].x() - path[1].x());
-        dubins::d_curve safe_curve;
-        dubins::d_shortest(path[1].x(), path[1].y(), th, path[2].x(), path[2].y(), th, 1. / min_r, safe_curve);
-        start = sample_curve(path[0], th0, path[1], th, 1. / min_r);
-        start.push_back(safe_curve); // always a straight line, in line with our intermediate curves strategy
-        end = sample_curve(path[2], th, path[3], thf, 1. / min_r);
-        std::ranges::move(end, std::back_insert_iterator(start));
-        return start;
-    }
-    */
+    // WITHOUT FIRST AND LAST CURVES
+
+    // double th;
+    // multi_dubins::path_t start;
+    // multi_dubins::path_t end;
+    // switch (path.size()){
+    // case 2:
+    //     return sample_curve(path[0], th0, path[1], thf, 1. / min_r);
+    // case 3:
+    //     // note th as intermediate angle might not always be the best but it looks like 
+    //     // a decent choice for a O(1) time algorithm
+    //     th = atan2(path[2].y() - path[1].y(), path[2].x() - path[1].x());
+    //     start = sample_curve(path[0], th0, path[1], th, 1. / min_r);
+    //     end = sample_curve(path[1], th, path[2], thf, 1. / min_r);
+    //     std::ranges::move(end, std::back_insert_iterator(start));
+    //     return start;
+    // case 4:
+    //     th = atan2(path[2].y() - path[1].y(), path[2].x() - path[1].x());
+    //     dubins::d_curve safe_curve;
+    //     dubins::d_shortest(path[1].x(), path[1].y(), th, path[2].x(), path[2].y(), th, 1. / min_r, safe_curve);
+    //     start = sample_curve(path[0], th0, path[1], th, 1. / min_r);
+    //     start.push_back(safe_curve); // always a straight line, in line with our intermediate curves strategy
+    //     end = sample_curve(path[2], th, path[3], thf, 1. / min_r);
+    //     std::ranges::move(end, std::back_insert_iterator(start));
+    //     return start;
+    // }
+    
 
     // general case
     multi_dubins::path_t sol{ path.size() - 1 };
@@ -161,17 +163,32 @@ multi_dubins::path_t Planner::dubins_path(const VisiLibity::Polyline& path, doub
 
     time = dubins_wrapper(path, sol, new_a, r);
     
-    /*
-    start = sample_curve(path[0], th0, path[1], sol[1].a1.th0, 1. / min_r);
-    end = sample_curve(new_a, sol[sol.size() - 2].a3.thf, path[path.size() - 1], thf, 1. / min_r);
-    sol.front() = start[0];
-    if (start.size() > 1)
-        sol.insert(sol.begin() + 1, start[1]);
-    std::ranges::move(end, std::back_insert_iterator(sol));
-    */
+    
+    // start = sample_curve(path[0], th0, path[1], sol[1].a1.th0, 1. / min_r);
+    // end = sample_curve(new_a, sol[sol.size() - 2].a3.thf, path[path.size() - 1], thf, 1. / min_r);
+    // sol.front() = start[0];
+    // if (start.size() > 1)
+    //     sol.insert(sol.begin() + 1, start[1]);
+    // std::ranges::move(end, std::back_insert_iterator(sol));
+    
     // until we make first and last curve
     sol[0] = {0};
     sol.back() = {0};
+    
+    return sol;
+}
+*/
+
+/**
+ * @brief create the dubins path following the proposed strategies 
+ */
+multi_dubins::path_t Planner::dubins_path(const VisiLibity::Polyline& path, double th0, double thf, double r, double& time){
+
+    // general case
+    multi_dubins::path_t sol{ path.size() - 1 };
+    VisiLibity::Point new_a; // useless here, backward compatibility with version with no first and last curves
+
+    time = dubins_wrapper(path, sol, new_a, r);
     
     return sol;
 }
@@ -191,7 +208,7 @@ void Planner::test(const VisiLibity::Polyline& shortest_path){
     double len = 0;
     for(int i = 0; i < p0.size(); ++i)
         len += p0[i].L;
-    std::cout << "time elapsed: " << time << " us Total length: " << len << "\n";
+    std::cout << std::fixed << "time elapsed: " << time << " us Total length: " << len << "\n";
     
     path_dump(shortest_path);
     dubins_dump(p0);

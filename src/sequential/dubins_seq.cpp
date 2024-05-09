@@ -64,12 +64,30 @@ dubins::d_curve Planner::get_safe_curve(VisiLibity::Point a, VisiLibity::Point b
 }
 
 double Planner::dubins_wrapper(const VisiLibity::Polyline& path, multi_dubins::path_t& sol, VisiLibity::Point& new_a, double r){
-    new_a = path[1];
+    new_a = path[0];
 
     auto start_time = std::chrono::system_clock::now();
 
-    for (uint64_t i = 1; i < path.size() - 2; ++i)
+    for (uint64_t i = 0; i < path.size() - 2; ++i)
         sol[i] = get_safe_curve(new_a, path[i + 1], path[i + 2], new_a, r);
+
+    // create the last trait (straight segment)
+    double x_prev = new_a.x();
+    double y_prev = new_a.y();
+    double th_prev = sol[sol.size() - 2].a3.thf; 
+
+    double x_final = path[path.size() - 1].x();
+    double y_final = path[path.size() - 1].y();
+    // th_final == th_prev
+
+    double dist = sqrt((x_prev - x_final) * (x_prev - x_final) + (y_prev - y_final) * (y_prev - y_final));
+
+    sol.back() = {
+        .a1 = {x_prev, y_prev, th_prev, 0, 0, x_prev, y_prev, th_prev},
+        .a2 = {x_prev, y_prev, th_prev, 0, dist, x_final, y_final, th_prev},
+        .a3 = {x_prev, y_prev, th_prev, 0, 0, x_final, y_final, th_prev},
+        .L = dist
+    };
         
     auto end_time = std::chrono::system_clock::now();
 

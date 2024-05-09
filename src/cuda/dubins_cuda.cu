@@ -12,11 +12,11 @@ __global__ void get_safe_curve_cuda(
     point_t* new_a_arr,
     dubins::d_curve* out_arr,
     const double r,
-    const int N_points
+    const int N_curves
 ){
 
     int id = blockIdx.x * blockDim.x + threadIdx.x;
-    if(id > N_points - 3)
+    if(id > N_curves) // each thread creates a curve from 3 points a, b, c. the last straigth segment is not created here
         return;
 
     point_t a = {x_components[id], y_components[id]};
@@ -91,19 +91,50 @@ __global__ void get_safe_curve_cuda(
     // }    
 }
 
+
+__global__ void adjust_lengths(point_t* new_a, dubins::d_curve* path, int N_curves){
+
+    int id = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(id > N_curves)
+        return;
+    double& new_x = new_a[id].x;//path[id].a3.x0;
+    double& new_y = new_a[id].y;//path[id].a3.y0;
+
+    path[id + 1].a2.x0 = new_x;
+    path[id + 1].a2.y0 = new_y;
+    path[id + 1].a2.L = sqrt((path[id + 1].a2.xf - new_x) * (path[id + 1].a2.xf - new_x)
+        + (path[id + 1].a2.yf - new_y) * (path[id + 1].a2.yf - new_y));
+
+    path[id + 1].a1.x0 = new_x;
+    path[id + 1].a1.xf = new_x;
+    path[id + 1].a1.y0 = new_y;
+    path[id + 1].a1.yf = new_y;
+
+    path[id + 1].L = path[id + 1].a2.L + path[id + 1].a3.L;
+}
+
 double Planner::dubins_wrapper(const VisiLibity::Polyline& path, multi_dubins::path_t& sol, VisiLibity::Point& new_a, double r){
     std::vector<double> x_components_h, y_components_h;
-    std::vector<point_t> new_a_arr_h{ sol.size() - 2 }; // first and last curves dont generate a new_a point
+
+    // number of dubins curves == number of new_a points 
+    // == number of points - 2 (last trait is always straight, no need to do it in CUDA)
+
+
+    // TODO replace point_t with dubins::point_t
+
+
+    std::vector<point_t> new_a_arr_h{ path.size() - 2 };
     int threads = 32;
     int blocks = (sol.size() + threads - 1) / threads; 
 
-    for (uint64_t i = 1; i < path.size(); ++i){
+    for (uint64_t i = 0; i < path.size(); ++i){
         x_components_h.push_back(path[i].x());
         y_components_h.push_back(path[i].y());
     } 
     
-    int n_bytes_x_components = sizeof(double) * x_components_h.size();
-    int n_bytes_out_arr = sizeof(dubins::d_curve) * new_a_arr_h.size(); // n. of curves = n. of new_a points
+    int n_bytes_x_components = sizeof(double) * path.size();
+    int n_bytes_dubins_arr = sizeof(dubins::d_curve) * new_a_arr_h.size(); // n. of curves == n. of new_a points
     int n_bytes_new_a_arr = sizeof(point_t) * new_a_arr_h.size();
 
     double *x_components, *y_components;
@@ -113,45 +144,42 @@ double Planner::dubins_wrapper(const VisiLibity::Polyline& path, multi_dubins::p
     point_t *new_a_arr_dev;
     cudaMalloc(&new_a_arr_dev, n_bytes_new_a_arr);
 
-    dubins::d_curve* out_arr_dev;
-    cudaMalloc(&out_arr_dev, n_bytes_out_arr);
+    dubins::d_curve* dubins_arr_dev;
+    cudaMalloc(&dubins_arr_dev, n_bytes_dubins_arr);
 
     cudaMemcpy(x_components, x_components_h.data(), n_bytes_x_components, cudaMemcpyHostToDevice);
     cudaMemcpy(y_components, y_components_h.data(), n_bytes_x_components, cudaMemcpyHostToDevice);
 
     auto start_time = std::chrono::system_clock::now();
-    get_safe_curve_cuda<<<blocks, threads>>>(x_components, y_components, new_a_arr_dev, out_arr_dev, r, x_components_h.size());
-    auto end_time = std::chrono::system_clock::now();
+    get_safe_curve_cuda<<<blocks, threads>>>(x_components, y_components, new_a_arr_dev, dubins_arr_dev, r, new_a_arr_h.size());
     
-    //std::cout << cudaDeviceSynchronize()<<"\n";
+    //cudaDeviceSynchronize(); // why not ??????
 
-    cudaMemcpy(sol.data()+1, out_arr_dev, n_bytes_out_arr, cudaMemcpyDeviceToHost); // +1 leaves space for 1° curve
+    adjust_lengths<<<blocks, threads>>>(new_a_arr_dev, dubins_arr_dev, new_a_arr_h.size());
+    cudaDeviceSynchronize();
+    auto end_time = std::chrono::system_clock::now();
+    cudaMemcpy(sol.data(), dubins_arr_dev, n_bytes_dubins_arr, cudaMemcpyDeviceToHost);
     cudaMemcpy(new_a_arr_h.data(), new_a_arr_dev, n_bytes_new_a_arr, cudaMemcpyDeviceToHost);
 
-    // adjust the 
-    for(int i = 2; i < sol.size()-1; ++i){
+    // create the last trait (straight segment)
+    double x_prev = sol[sol.size() - 2].a3.xf;
+    double y_prev = sol[sol.size() - 2].a3.yf;
+    double th_prev = sol[sol.size() - 2].a3.thf; 
 
-        sol[i].a2.x0 = new_a_arr_h[i-2].x;
-        sol[i].a2.y0 = new_a_arr_h[i-2].y;
+    double x_final = path[path.size() - 1].x();
+    double y_final = path[path.size() - 1].y();
+    // th_final == th_prev
 
-        // I want to have a continous curve
-        sol[i].a1.x0 = sol[i].a2.x0;
-        sol[i].a1.y0 = sol[i].a2.y0;
-        sol[i].a1.xf = sol[i].a2.x0;
-        sol[i].a1.yf = sol[i].a2.y0;
+    double dist = sqrt((x_prev - x_final) * (x_prev - x_final) + (y_prev - y_final) * (y_prev - y_final));
 
-        sol[i].a2.L = sqrt(((sol[i].a2.xf - sol[i].a2.x0)*(sol[i].a2.xf - sol[i].a2.x0) + 
-            (sol[i].a2.yf - sol[i].a2.y0)*(sol[i].a2.yf - sol[i].a2.y0)));
-        sol[i].L = sol[i].a2.L + sol[i].a3.L;;
-    }
+    sol.back() = {
+        .a1 = {x_prev, y_prev, th_prev, 0, 0, x_prev, y_prev, th_prev},
+        .a2 = {x_prev, y_prev, th_prev, 0, dist, x_final, y_final, th_prev},
+        .a3 = {x_prev, y_prev, th_prev, 0, 0, x_final, y_final, th_prev},
+        .L = dist
+    };
 
-    // needed to adjust the length of the curve between second and third point
-    // can't do it in CUDA since out_arr[0] is not corrected after __syncthreads()
-    // sol[1].a2.L = sqrt(((sol[1].a2.xf - sol[1].a2.x0)*(sol[1].a2.xf - sol[1].a2.x0) + 
-    //         (sol[1].a2.yf - sol[1].a2.y0)*(sol[1].a2.yf - sol[1].a2.y0)));
-    // sol[1].L += sol[1].a2.L;
-
-    new_a = {new_a_arr_h.back().x, new_a_arr_h.back().y};
+    new_a = {new_a_arr_h.back().x, new_a_arr_h.back().y}; 
 
     return std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
 }
