@@ -11,7 +11,7 @@ int main(int argc, char** argv){
     std::cin >> n_points;
     
     while(n_points--){
-        fscanf(stdin, "%lf, %lf", &x, &y);
+        fscanf(stdin, "%lf,%lf", &x, &y);
         shortest_path.push_back({x, y});
     }
 
