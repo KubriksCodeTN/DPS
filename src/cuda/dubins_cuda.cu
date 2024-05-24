@@ -1,22 +1,49 @@
-#include "../planner.hpp"
-#include "../multi_dubins/multi_dubins.hpp"
 #include "cuda_runtime.h"
+#include "../planner.hpp"
+#include <iostream>
+#include <chrono>
+#include <stdio.h>
+#include <cassert>
 
 struct point_t{
-    double x,y;
+    double x, y;
 };
+
+/*
+struct lk_word{
+    point_t p0, q0, q1;
+    double th0, thf;
+    double k;
+};
+*/
+
+struct lk_word{
+    point_t *p0, *q0, *q1;
+    double *th0, *thf;
+    double *k;
+};
+
+__global__ void warm_up_gpu(){
+    unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    float ia, ib;
+    ia = ib = 0.0f;
+    ib += ia + tid; 
+}
 
 __global__ void get_safe_curve_cuda(
     double* x_components,
     double* y_components, 
-    point_t* new_a_arr,
-    dubins::d_curve* out_arr,
+    point_t* p0,
+    point_t* q0,
+    point_t* q1,
+    double* th00,
+    double* thff,
+    double* k,
     const double r,
     const int N_curves
 ){
-
     int id = blockIdx.x * blockDim.x + threadIdx.x;
-    if(id > N_curves) // each thread creates a curve from 3 points a, b, c. the last straigth segment is not created here
+    if (id >= N_curves) // each thread creates a curve from 3 points a, b, c. the last straigth segment is not created here
         return;
 
     point_t a = {x_components[id], y_components[id]};
@@ -45,141 +72,110 @@ __global__ void get_safe_curve_cuda(
     * with this we can easily get the angle between the two vectors
     * we add fabs to normalize in [0, pi)
     */
-    
-    //old version with sincos
-/*   
-    double cross_prod_3_component = vx0 * vyf - vy0 * vxf;
-    double alpha = M_PI - atan2(fabs(cross_prod_3_component), vx0 * vxf + vy0 * vyf); //angle between vectors
-    double sina, cosa;
-    sincos(alpha / 2., &sina, &cosa);
-    double d = r * (cosa / sina);
-    double xf = b.x + d * unitxf;
-    double yf = b.y + d * unityf;
-    new_a_arr[id] = {xf, yf};
-*/
-    
 
     double cross_prod_3_component = vx0 * vyf - vy0 * vxf;
-    double abs_cross_prod = fabs(cross_prod_3_component);
-    double alpha = M_PI - atan2(abs_cross_prod, vx0 * vxf + vy0 * vyf); //angle between vectors "pi -" can be canceled in every place where alpha is used 
+    double abs_cross_prod = std::fabs(cross_prod_3_component);
     double d = r * (abs_cross_prod / (vx0 * vxf + vy0 * vyf + normf * norm0));
     double xf = b.x + d * unitxf;
     double yf = b.y + d * unityf;
-    new_a_arr[id] = {xf, yf};
+    double xq0 = b.x - d * unitx0;
+    double yq0 = b.y - d * unity0;
 
-    point_t turning_point{b.x - d * unitx0, b.y - d * unity0};
-    double straight_segment_len = sqrt((turning_point.x - a.x)*(turning_point.x - a.x) + (turning_point.y - a.y)*(turning_point.y - a.y));
+    q0[id] = {xq0, yq0};    
+    q1[id] = {xf, yf};
+    th00[id] = th0;
+    thff[id] = thf;
+    k[id] = ((cross_prod_3_component > 0) - (cross_prod_3_component < 0)) / r;
+    p0[id + 1] = {xf, yf};        
+}
 
-    dubins::d_curve curve = {
-        .a1 = {a.x, a.y, th0, 0, 0, a.x, a.y, th0}, // garbage
-        .a2 = {a.x, a.y, th0, 0, straight_segment_len, turning_point.x, turning_point.y, th0},
-        .a3 = {turning_point.x, turning_point.y, th0, ((cross_prod_3_component > 0) - (cross_prod_3_component < 0)) / r, (M_PI - alpha) * r, xf, yf, thf},
-        .L = /* a1.len (which is 0) + */ straight_segment_len + (M_PI - alpha) * r
+double Planner::dubins_wrapper(const VisiLibity::Polyline &path_poly, multi_dubins::path_t &sol, VisiLibity::Point &new_a, double){
+    // cuda startup
+    cudaFree(0);
+    warm_up_gpu<<<1024, 512>>>();
+
+    int32_t n = path_poly.size();
+
+    double threads = 512; // check
+    double blocks = (n + threads - 1) / threads;
+
+    double* x;
+    double* y;
+    double* x_cuda;
+    double* y_cuda;
+    lk_word path;
+    lk_word path_cuda;       
+
+    cudaMallocHost(&x, n * sizeof(double));
+    cudaMallocHost(&y, n * sizeof(double));
+    cudaMallocHost(&(path.p0), n * sizeof(point_t));
+    cudaMallocHost(&(path.q0), n * sizeof(point_t));
+    cudaMallocHost(&(path.q1), n * sizeof(point_t));
+    cudaMallocHost(&(path.th0), n * sizeof(double));
+    cudaMallocHost(&(path.thf), n * sizeof(double));
+    cudaMallocHost(&(path.k), n * sizeof(double));
+    cudaMalloc(&(path_cuda.p0), n * sizeof(point_t));
+    cudaMalloc(&(path_cuda.q0), n * sizeof(point_t));
+    cudaMalloc(&(path_cuda.q1), n * sizeof(point_t));
+    cudaMalloc(&(path_cuda.th0), n * sizeof(double));
+    cudaMalloc(&(path_cuda.thf), n * sizeof(double));
+    cudaMalloc(&(path_cuda.k), n * sizeof(double));
+
+    for (auto i = 0; i < n; ++i){
+        x[i] = path_poly[i].x();
+        y[i] = path_poly[i].y();
+        //printf("%lf, %lf\n", x[i], y[i]);
+    }
+
+    auto start = std::chrono::high_resolution_clock::now();
+    cudaMalloc(&x_cuda, n * sizeof(double));  
+    cudaMalloc(&y_cuda, n * sizeof(double));
+    cudaMemcpy(x_cuda, x, n * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(y_cuda, y, n * sizeof(double), cudaMemcpyHostToDevice);
+    get_safe_curve_cuda<<<blocks, threads>>>(x_cuda, y_cuda, path_cuda.p0, path_cuda.q0, path_cuda.q1, path_cuda.th0, path_cuda.thf, path_cuda.k,.5, n - 2);   
+    cudaMemcpy(path.p0, path_cuda.p0, (n - 2) * sizeof(point_t), cudaMemcpyDeviceToHost);
+    cudaMemcpy(path.q0, path_cuda.q0, (n - 2) * sizeof(point_t), cudaMemcpyDeviceToHost);
+    cudaMemcpy(path.q1, path_cuda.q1, (n - 2) * sizeof(point_t), cudaMemcpyDeviceToHost);
+    cudaMemcpy(path.th0, path_cuda.th0, (n - 2) * sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(path.thf, path_cuda.thf, (n - 2) * sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(path.k, path_cuda.k, (n - 2) * sizeof(double), cudaMemcpyDeviceToHost);
+    cudaDeviceSynchronize();
+    auto end = std::chrono::high_resolution_clock::now();
+
+    path.p0[0] = {x[0], y[0]};
+
+    auto dist = [](const point_t& a, const point_t& b){
+        return sqrt((a.x - b.x)  * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
     };
 
-    out_arr[id] = curve;
+    // in a3 we use a formula for arc len given radius and coord of points
+    // just for printing on desmos
+    for (int i = 0; i < n - 2; ++i){
+        double l2 = dist({path.p0[i].x, path.p0[i].y}, {path.q0[i].x, path.q0[i].y});
+        double l3 = dist({path.q0[i].x, path.q0[i].y}, {path.q1[i].x, path.q1[i].y});
+        sol[i] = {
+            .a1 = {path.p0[i].x, path.p0[i].y, path.th0[i], 0, 0, path.p0[i].x, path.p0[i].y, path.th0[i]},
+            .a2 = {path.p0[i].x, path.p0[i].y, path.th0[i], 0, l2, path.q0[i].x, path.q0[i].y, path.th0[i]},
+            .a3 = {path.q0[i].x, path.q0[i].y, path.th0[i], path.k[i], 2 * inv_k * asin(l3 / 2 / inv_k), path.q1[i].x, path.q1[i].y, path.thf[i]},
+            .L = l2 + l3
+        };
+    }
 
-    // correct the final point and length of each curve
-    // __syncthreads();
+    // build the last straight curve
 
-    // if(id != N_points - 3){
-    //     out_arr[id + 1].a2.x0 = xf;
-    //     out_arr[id + 1].a2.y0 = yf;
-    //     out_arr[id + 1].a2.L = sqrt((xf - out_arr[id + 1].a2.xf) * (xf - out_arr[id + 1].a2.xf) + 
-    //         (yf - out_arr[id + 1].a2.yf) * (yf - out_arr[id + 1].a2.yf));   
-    //     out_arr[id + 1].L = out_arr[id + 1].a2.L + out_arr[id + 1].a3.L;
-    // }    
-}
+    point_t last_p0 = {sol[sol.size() - 2].a3.xf, sol[sol.size() - 2].a3.yf};
+    double last_th0 = sol[sol.size() - 2].a3.thf;
 
-
-__global__ void adjust_lengths(point_t* new_a, dubins::d_curve* path, int N_curves){
-
-    int id = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if(id > N_curves)
-        return;
-    double& new_x = new_a[id].x;//path[id].a3.x0;
-    double& new_y = new_a[id].y;//path[id].a3.y0;
-
-    path[id + 1].a2.x0 = new_x;
-    path[id + 1].a2.y0 = new_y;
-    path[id + 1].a2.L = sqrt((path[id + 1].a2.xf - new_x) * (path[id + 1].a2.xf - new_x)
-        + (path[id + 1].a2.yf - new_y) * (path[id + 1].a2.yf - new_y));
-
-    path[id + 1].a1.x0 = new_x;
-    path[id + 1].a1.xf = new_x;
-    path[id + 1].a1.y0 = new_y;
-    path[id + 1].a1.yf = new_y;
-
-    path[id + 1].L = path[id + 1].a2.L + path[id + 1].a3.L;
-}
-
-double Planner::dubins_wrapper(const VisiLibity::Polyline& path, multi_dubins::path_t& sol, VisiLibity::Point& new_a, double r){
-    std::vector<double> x_components_h, y_components_h;
-
-    // number of dubins curves == number of new_a points 
-    // == number of points - 2 (last trait is always straight, no need to do it in CUDA)
-
-
-    // TODO replace point_t with dubins::point_t
-
-
-    std::vector<point_t> new_a_arr_h{ path.size() - 2 };
-    int threads = 32;
-    int blocks = (sol.size() + threads - 1) / threads; 
-
-    for (uint64_t i = 0; i < path.size(); ++i){
-        x_components_h.push_back(path[i].x());
-        y_components_h.push_back(path[i].y());
-    } 
-    
-    int n_bytes_x_components = sizeof(double) * path.size();
-    int n_bytes_dubins_arr = sizeof(dubins::d_curve) * new_a_arr_h.size(); // n. of curves == n. of new_a points
-    int n_bytes_new_a_arr = sizeof(point_t) * new_a_arr_h.size();
-
-    double *x_components, *y_components;
-    cudaMalloc(&x_components, n_bytes_x_components);
-    cudaMalloc(&y_components, n_bytes_x_components);
-
-    point_t *new_a_arr_dev;
-    cudaMalloc(&new_a_arr_dev, n_bytes_new_a_arr);
-
-    dubins::d_curve* dubins_arr_dev;
-    cudaMalloc(&dubins_arr_dev, n_bytes_dubins_arr);
-
-    cudaMemcpy(x_components, x_components_h.data(), n_bytes_x_components, cudaMemcpyHostToDevice);
-    cudaMemcpy(y_components, y_components_h.data(), n_bytes_x_components, cudaMemcpyHostToDevice);
-
-    auto start_time = std::chrono::system_clock::now();
-    get_safe_curve_cuda<<<blocks, threads>>>(x_components, y_components, new_a_arr_dev, dubins_arr_dev, r, new_a_arr_h.size());
-    
-    //cudaDeviceSynchronize(); // why not ??????
-
-    adjust_lengths<<<blocks, threads>>>(new_a_arr_dev, dubins_arr_dev, new_a_arr_h.size());
-    cudaDeviceSynchronize();
-    auto end_time = std::chrono::system_clock::now();
-    cudaMemcpy(sol.data(), dubins_arr_dev, n_bytes_dubins_arr, cudaMemcpyDeviceToHost);
-    cudaMemcpy(new_a_arr_h.data(), new_a_arr_dev, n_bytes_new_a_arr, cudaMemcpyDeviceToHost);
-
-    // create the last trait (straight segment)
-    double x_prev = sol[sol.size() - 2].a3.xf;
-    double y_prev = sol[sol.size() - 2].a3.yf;
-    double th_prev = sol[sol.size() - 2].a3.thf; 
-
-    double x_final = path[path.size() - 1].x();
-    double y_final = path[path.size() - 1].y();
-    // th_final == th_prev
-
-    double dist = sqrt((x_prev - x_final) * (x_prev - x_final) + (y_prev - y_final) * (y_prev - y_final));
+    point_t last_q0 = {path_poly[path_poly.size() - 1].x(), path_poly[path_poly.size() - 1].y()};
+    double last_len = dist(last_p0, last_q0);
 
     sol.back() = {
-        .a1 = {x_prev, y_prev, th_prev, 0, 0, x_prev, y_prev, th_prev},
-        .a2 = {x_prev, y_prev, th_prev, 0, dist, x_final, y_final, th_prev},
-        .a3 = {x_prev, y_prev, th_prev, 0, 0, x_final, y_final, th_prev},
-        .L = dist
+        .a1 = {last_p0.x, last_p0.y, last_th0, 0, 0, last_p0.x, last_p0.y, last_th0},
+        .a2 = {last_p0.x, last_p0.y, last_th0, 0, last_len, last_q0.x, last_q0.y, last_th0},
+        .a3 = {last_q0.x, last_q0.y, last_th0, 0, 0, last_q0.x, last_q0.y, last_th0},
+        .L = last_len
     };
 
-    new_a = {new_a_arr_h.back().x, new_a_arr_h.back().y}; 
 
-    return std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 }
