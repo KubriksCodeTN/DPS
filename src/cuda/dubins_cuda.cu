@@ -148,6 +148,10 @@ double Planner::dubins_wrapper(const VisiLibity::Polyline &path_poly, multi_dubi
         return sqrt((a.x - b.x)  * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
     };
 
+    // for(int i = 0; i<n-2; ++i){
+    //     printf("(%lf,%lf)\n(%lf,%lf)\n(%lf,%lf)\n", path.p0[i].x, path.p0[i].y, path.q0[i].x,path.q0[i].y,path.q1[i].x,path.q1[i].y);
+    // }
+
     //----- just for printing on desmos
 
     
@@ -158,7 +162,7 @@ double Planner::dubins_wrapper(const VisiLibity::Polyline &path_poly, multi_dubi
         sol[i] = {
             .a1 = {path.p0[i].x, path.p0[i].y, path.th0[i], 0, 0, path.p0[i].x, path.p0[i].y, path.th0[i]},
             .a2 = {path.p0[i].x, path.p0[i].y, path.th0[i], 0, l2, path.q0[i].x, path.q0[i].y, path.th0[i]},
-            .a3 = {path.q0[i].x, path.q0[i].y, path.th0[i], path.k[i], 2 * inv_k * asin(l3 / 2 / inv_k), path.q1[i].x, path.q1[i].y, path.thf[i]},
+            .a3 = {path.q0[i].x, path.q0[i].y, path.th0[i], path.k[i], l3, path.q1[i].x, path.q1[i].y, path.thf[i]},
             .L = l2 + l3
         };
     }
