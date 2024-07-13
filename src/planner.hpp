@@ -28,5 +28,5 @@ class Planner{
 
         Planner() = default;
         multi_dubins::path_t dubins_path(const VisiLibity::Polyline&, double, double, double, double&);
-        void test(const VisiLibity::Polyline&);
+        void test(const VisiLibity::Polyline&, double&, double&);
 };

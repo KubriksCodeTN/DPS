@@ -193,7 +193,7 @@ multi_dubins::path_t Planner::dubins_path(const VisiLibity::Polyline& path, doub
     return sol;
 }
 
-void Planner::test(const VisiLibity::Polyline& shortest_path){
+void Planner::test(const VisiLibity::Polyline& shortest_path, double& t, double& l){
 
 
     double th0 = atan2(shortest_path[1].y() - shortest_path[0].y(), shortest_path[1].x() - shortest_path[0].x());
@@ -212,4 +212,8 @@ void Planner::test(const VisiLibity::Polyline& shortest_path){
     
     path_dump(shortest_path);
     dubins_dump(p0);
+
+    t = time;
+    l = len;
+
 }

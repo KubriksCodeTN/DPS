@@ -15,6 +15,8 @@ int main(int argc, char** argv){
         shortest_path.push_back({x, y});
     }
 
-    node.test(shortest_path);
+    double time, len;
+
+    node.test(shortest_path, time, len);
   
 }
