@@ -184,6 +184,17 @@ multi_dubins::path_t Planner::dubins_path(const VisiLibity::Polyline& path, doub
  */
 multi_dubins::path_t Planner::dubins_path(const VisiLibity::Polyline& path, double th0, double thf, double r, double& time){
 
+    if(path.size() == 2){
+        double l = sqrt((path[0].x() - path[1].x()) * (path[0].x() - path[1].x()) + (path[0].y() - path[1].y()) * (path[0].y() - path[1].y()));
+        return { {
+            {path[0].x(), path[0].y(), th0, 0, 0, path[0].x(), path[0].y(), th0},
+            {path[0].x(), path[0].y(), th0, 0, l, path[1].x(), path[1].y(), thf},
+            {path[1].x(), path[1].y(), thf, 0, 0, path[1].x(), path[1].y(), thf},
+            l
+        }};
+        
+    }
+
     // general case
     multi_dubins::path_t sol{ path.size() - 1 };
     VisiLibity::Point new_a; // useless here, backward compatibility with version with no first and last curves
