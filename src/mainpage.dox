@@ -1,0 +1,53 @@
+/**
+ * \mainpage Tests
+ * \section sec1 Interpolation Time Test
+ * This tests compares the interpolation time of different algorithms:<br>
+ * - DPS
+ * - DPS implemented in cuda
+ * - MPDP 
+ * - OMPL dubins curves (we provide our angles and starting/ending points)
+ * 
+ * \section usage1 Usage
+ * To run this test it is possible to use using the following command: <br>
+ \verbatim
+   cd tests
+   python3 test_interpolation.py
+ \endverbatim
+ * \section sec2 rrt* Test
+ * This tests compares the performance of rrtdubins vs rrt* + DPS vs our implementation of rrt* + DPS<br>
+ * 
+ * \section usage2 Usage
+ * To run this test it is possible to use using the following command: <br>
+ \verbatim
+   cd tests
+   python3 test_timeout.py
+ \endverbatim
+ * \section sec3 Visibility Test
+ * This tests searches for a path using a visibility graph and then interpolates the solution found using:<br>
+ * - DPS
+ * - DPS but calculating the solution piece using the Dubins' formulation
+ * - MPDP (the interpolated path found by MPDP are assumed to be collision free even though there is no guarantee)
+ * 
+ * \section usage3 Usage
+ * To run this test it is possible to use using the following command: <br>
+ \verbatim
+   ./roadmap epsilon < path_to_map_file
+ \endverbatim
+ * where epsilon is the tolerance for the roadmap.<br>
+ * The output is a svg files with all the necessary data anche can be plotted with the main_plot.py script
+ * \section sec4 Our implementation of rrt* Test
+ * This test searches a path using our implementation of rrt* and then checks whether or not the path is feasible to interpolate using DPS<br>
+ * This implementation uses rtree for collision checking and kdtree for nearest search<br>
+ * Maps used must be already offsetted and use the following format:
+ *     - number of obstacles (including borders)
+ *     - number vertices of the border followed by said vertices
+ *     - obstacles vertices (boxes)
+ * 
+ * \section usage4 Usage
+ * To run this test it is possible to use the script test.sh in the test folder or manually call the executable
+ * using the following command: <br>
+ \verbatim
+   ./rrtstar epsilon stepsz gamma timeout x0 y0 xf yf < path_to_map_file
+ \endverbatim
+ * NOTE that timeout is in seconds
+ */
