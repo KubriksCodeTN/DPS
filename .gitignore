@@ -1,0 +1,7 @@
+external_library/
+.vscode/
+bin/
+build/
+.idea/
+obj/
+tmp.txt
