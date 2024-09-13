@@ -1,0 +1,15 @@
+[submodule "ompl"]
+	path = external_libraries/ompl
+	url = https://github.com/ompl/ompl.git
+[submodule "nanoflann"]
+	path = external_libraries/nanoflann
+	url = https://github.com/jlblancoc/nanoflann
+[submodule "visilibity"]
+	path = external_libraries/visilibity
+	url = https://github.com/karlobermeyer/VisiLibity1
+[submodule "clipper2"]
+	path = external_libraries/clipper2
+	url = https://github.com/AngusJohnson/Clipper2
+[submodule "mpdp"]
+	path = external_libraries/mpdp
+	url = https://github.com/icosac/mpdp
