@@ -212,9 +212,7 @@ And viewed by opening `html/index.html` on the browser
 
 # Contributors
 
-Pastorelli Patrick (patrick.pastorelli@studenti.unitn.it)
-
-Dagnino Simone (simone.dagnino@studenti.unitn.it)
+[KubriksCodeTN](https://github.com/KubriksCodeTN)
 
 # Licence
 
