@@ -213,6 +213,7 @@ And viewed by opening `html/index.html` on the browser
 # Contributors
 
 [KubriksCodeTN](https://github.com/KubriksCodeTN)
+[simone3c](https://github.com/simone3c)
 
 # Licence
 
